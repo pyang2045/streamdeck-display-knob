@@ -70,7 +70,7 @@ Conclusion: HID is a viable second path but needs protocol RE. DDC is the practi
 ## Recommended approach for display-knob
 
 1. **Brightness:** `m1ddc display 1 set luminance N` (0–100), or link `libm1ddc` / talk to `IOAVService` directly for lower latency. For a knob, use `m1ddc ... chg luminance ±N` for relative steps.
-2. **Input source:** `m1ddc display <uuid> set input-alt <code>` with the LG map 210=Thunderbolt / 144=HDMI / 208=DisplayPort (avoid standard `set input`). Verify by polling `get luminance` (profiles: TB 26, DP 30, HDMI 90), retrying the write until the expected value appears; handle the display temporarily vanishing from the list.
+2. **Input source:** `m1ddc display <uuid> set input-alt <code>` with the LG map 210=Thunderbolt / 144=HDMI / 208=DisplayPort (avoid standard `set input`). **Switch blindly, guarded by a time lock (~5 s)** — the final design after field testing. Luminance-profile verification (probing `get luminance` and matching per-input values) was tried and abandoned: profiles drift whenever brightness is changed via the monitor's joystick, reads while on another input can return garbage, and failed verification caused re-sends that restarted the link handshake (visible flashing). Track the last commanded input in software instead.
 3. Identify the display by UUID (`041B0EA8-...`) rather than list index, since ordering can change: `m1ddc display 041B0EA8-173D-41AF-B60D-A63236F45C02 set luminance N`.
 4. Alternatives: BetterDisplay CLI (installed copy is v2.0.11 and currently fails to launch its CLI on this OS — would need upgrade), Lunar CLI, or direct IOKit code copied from the m1ddc source (MIT).
 

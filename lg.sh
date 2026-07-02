@@ -3,8 +3,7 @@
 # Usage:
 #   ./lg.sh tb|hdmi|dp            switch input (LG-alt VCP 0xF4 codes)
 #   ./lg.sh bri <0-100|+n|-n>     set or change brightness
-#   ./lg.sh current               infer active input from luminance profile
-#   ./lg.sh status                raw luminance probe (TB=26, DP=30, HDMI=90)
+#   ./lg.sh status                current brightness (only trustworthy while on TB)
 #   ./lg.sh list                  list displays
 
 # Auto-discover the LG UltraFine's UUID; fall back to the known one.
@@ -21,18 +20,6 @@ case "$1" in
       *)     m1ddc display $LG set luminance $2 ;;
     esac ;;
   status) echo "luminance: $(m1ddc display $LG get luminance 2>&1)" ;;
-  current)
-    # No trustworthy input readback on this monitor (VCP 0x60 always says 15;
-    # 0xF4 is write-only). Infer from the per-input brightness profile instead.
-    # NOTE: values below must match your actual per-input brightness settings.
-    v=$(m1ddc display $LG get luminance 2>/dev/null)
-    case "$v" in
-      26) echo "thunderbolt (luminance=$v)" ;;
-      30) echo "displayport (luminance=$v)" ;;
-      90) echo "hdmi (luminance=$v)" ;;
-      "") echo "unknown — display not enumerated (TB link down?)" ;;
-      *)  echo "unknown profile (luminance=$v) — update the map in lg.sh" ;;
-    esac ;;
   list)   m1ddc display list ;;
   *)      sed -n '2,7p' "$0"; exit 1 ;;
 esac

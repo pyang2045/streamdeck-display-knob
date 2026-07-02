@@ -28,7 +28,27 @@ $ m1ddc display 1 get input
 Notes:
 - On Apple Silicon, DDC goes through `IOAVService`/`DCPAVServiceProxy` (two `Location=External` instances present, one per external display). `m1ddc`, BetterDisplay, and Lunar all use this path.
 - The very first DDC attempt right after install failed with "Could not find a suitable external display"; a retry seconds later worked. Treat DDC as occasionally flaky — add one retry in any tooling.
-- Input switching itself was **not** exercised (it would have yanked the main display away mid-session), but since VCP 0x60 responds to reads, writes are expected to work: `m1ddc display 1 set input <value>`. Typical LG values: 15/0x0F DisplayPort, 17–18 HDMI (some LG models use 144/145), 25 or 27 for USB-C/Thunderbolt. Determine empirically: switch inputs from the OSD and read `get input` on each.
+
+### 1b. Input switching via DDC — WORKS ✅ (tested live, with caveats)
+
+Round-trip switching was verified repeatedly with the user watching the OSD (Xbox on HDMI, Mac on Thunderbolt 5):
+
+```console
+m1ddc display <uuid> set input 16   # → HDMI (Xbox appeared; luminance probe confirmed)
+m1ddc display <uuid> set input 17   # → DisplayPort input
+m1ddc display <uuid> set input 15   # → back to Thunderbolt (Mac)
+```
+
+**The code map is positional, not the standard MCCS table.** Best-fit mapping from all observations: `15 = Thunderbolt`, `16 = HDMI`, `17 = DisplayPort` — i.e. codes DP1/DP2/HDMI1 select OSD inputs 1/2/3. LG-alternate codes (`set input-alt` 144/145/208–210, VCP 0xF4) and standard 18/19/20/5/6/27 did nothing observable.
+
+Hard-won caveats (all observed live):
+
+1. **`get input` readback lies.** It always returns 15 over the Thunderbolt link regardless of the OSD's active input. Never use it for verification.
+2. **Luminance readback is a working active-input probe.** The monitor keeps per-input brightness profiles and `get luminance` returns the *active* input's value (TB profile read 26; while showing HDMI it read 90). Poll it to detect whether a switch actually happened.
+3. **Signal-dependent behavior.** Switching to an input with no live signal is unreliable: with the Xbox in standby all HDMI codes were silently ignored; with the Xbox awake `set input 16` switched to it. Once the Xbox blanked its output again, `16` fell through to the DisplayPort input instead. Dead-input targets may be refused or redirected.
+4. **Restores can need retries.** Returning from the dead DP input via `set input 15` worked first try; returning from the *live* HDMI input once required several attempts (write apparently dropped during signal handshake). Retry `set input 15` every ~4 s until the luminance probe shows the TB profile value.
+5. **The DDC channel from the Mac stays alive no matter which input is displayed** (luminance stayed readable while the OSD showed HDMI/DP), so programmatic recovery is always possible — the "switching away severs DDC" fear did not materialize on this monitor.
+6. DDC capabilities-string reads (0xF3/0xE3 chunked protocol) fail on this display (and on the EIZO via the same code path), so the value map couldn't be read out — it was derived empirically.
 
 ### 2. Apple-native brightness (DisplayServices) — NOT available ❌
 
@@ -48,7 +68,7 @@ Conclusion: HID is a viable second path but needs protocol RE. DDC is the practi
 ## Recommended approach for display-knob
 
 1. **Brightness:** `m1ddc display 1 set luminance N` (0–100), or link `libm1ddc` / talk to `IOAVService` directly for lower latency. For a knob, use `m1ddc ... chg luminance ±N` for relative steps.
-2. **Input source:** `m1ddc display 1 set input <code>` — map codes by reading `get input` while on each input.
+2. **Input source:** `m1ddc display <uuid> set input <code>` with the positional map 15=TB / 16=HDMI / 17=DP. Verify success by polling `get luminance` (per-input profiles differ), retry the write until the expected profile value appears, and expect dead inputs to refuse or redirect the switch.
 3. Identify the display by UUID (`041B0EA8-...`) rather than list index, since ordering can change: `m1ddc display 041B0EA8-173D-41AF-B60D-A63236F45C02 set luminance N`.
 4. Alternatives: BetterDisplay CLI (installed copy is v2.0.11 and currently fails to launch its CLI on this OS — would need upgrade), Lunar CLI, or direct IOKit code copied from the m1ddc source (MIT).
 
@@ -90,7 +110,7 @@ LG Switch (Mac/Win), Dual Controller, LG Calibration Studio; OnScreen Control is
 |---|---|---|
 | Brightness (read/write) | **Confirmed, tested locally** | DDC VCP 0x10 via `m1ddc` / IOAVService |
 | Volume | Confirmed by owners | DDC VCP 0x62 |
-| Input source (read) | **Confirmed, tested locally** (reads 15 = DP1) | DDC VCP 0x60 |
-| Input source (switch) | Very likely, untested | DDC VCP 0x60 — probe standard then LG-alt values |
+| Input source (read) | Readable but **useless** — always returns 15 | Use `get luminance` per-input profile as active-input probe |
+| Input source (switch) | **Confirmed, tested locally** (round-trips observed) | DDC VCP 0x60, positional codes: 15=TB, 16=HDMI, 17=DP; retry + luminance-verify; dead inputs may refuse |
 | Apple-native brightness | Not supported | — (LG Switch app replaces it; vendor HID PID 0x9A39, protocol undocumented) |
 

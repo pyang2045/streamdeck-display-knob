@@ -16,10 +16,13 @@ on the keys. Builds directly on the verified findings in `RESEARCH.md`.
 
 ## Architecture
 
+Target device: Stream Deck XL (32 keys, no dials), app 7.5.0.
+
 ```
-Stream Deck app (7.4.2)
+Stream Deck app (7.5.0)
   └─ display-knob plugin (Elgato SDK v2, Node 20 runtime, TypeScript)
        ├─ actions/switch-input.ts   "Switch Input" key action (target set in PI)
+       ├─ actions/brightness.ts     "Brightness Up/Down" key action (direction in PI)
        ├─ actions/cycle-input.ts    optional: cycle TB → HDMI → DP → TB
        ├─ display-controller.ts     all DDC logic (single shared instance)
        └─ m1ddc                     bundled universal binary (MIT), execFile'd
@@ -48,9 +51,14 @@ Wraps `m1ddc`, encoding every hard-won rule from RESEARCH.md:
 - **Switch Input** key: Property Inspector dropdown (Thunderbolt / HDMI /
   DisplayPort). Key shows input glyph; SDK `setState` highlights when its
   input is active; brief ✓/✗ overlay after a switch attempt.
+- **Brightness Up / Brightness Down** keys: Property Inspector sets direction
+  and step (default ±10, `m1ddc chg luminance`). Hold-to-repeat (repeat every
+  ~250 ms while pressed via keyDown/keyUp timers); key title shows the current
+  value briefly after a change. Note: brightness changes shift the active
+  input's luminance profile, so the input-detection probe map must be updated
+  live by the poller after each change (track "current brightness per input"
+  in global settings).
 - **Cycle Input** key (optional, v2).
-- Stretch (only if the device is a Stream Deck + with dials): brightness dial
-  action using `chg luminance ±n` — the literal "display knob".
 
 ## Implementation steps
 

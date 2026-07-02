@@ -8338,8 +8338,12 @@ const INPUT_LABEL = {
 const DEFAULT_UUID = "041B0EA8-173D-41AF-B60D-A63236F45C02";
 const DEFAULT_PROFILES = { tb: 26, hdmi: 90, dp: 30 };
 const POLL_INTERVAL_MS = 4000;
-const SWITCH_RETRY_MS = 4000;
-const SWITCH_MAX_TRIES = 5;
+const SWITCH_MAX_SENDS = 3;
+const VERIFY_POLL_MS = 2000;
+/** The 6K Thunderbolt link renegotiation is slow — re-sending the switch
+ * command while it is still handshaking restarts it (visible screen flashes),
+ * so give TB a long verify window before ever re-sending. */
+const VERIFY_DEADLINE_MS = { tb: 12000, hdmi: 8000, dp: 8000 };
 const SWITCH_LOCK_MS = 5000;
 class DisplayController {
     profiles = { ...DEFAULT_PROFILES };
@@ -8496,28 +8500,41 @@ class DisplayController {
         this.switching = true;
         this.lockedUntil = Date.now() + SWITCH_LOCK_MS;
         try {
-            for (let attempt = 1; attempt <= SWITCH_MAX_TRIES; attempt++) {
+            for (let attempt = 1; attempt <= SWITCH_MAX_SENDS; attempt++) {
                 try {
                     await this.m1ddc("set", "input-alt", String(INPUT_ALT_CODE[target]));
                 }
                 catch (e) {
                     streamDeck.logger.warn(`setInput write failed (attempt ${attempt}): ${e}`);
                 }
-                await sleep(SWITCH_RETRY_MS);
-                const lum = await this.getLuminance();
-                const active = this.classify(lum);
-                streamDeck.logger.info(`setInput ${target} attempt ${attempt}: luminance=${lum} → ${active}`);
-                if (active === target) {
-                    this.assumedInput = target;
-                    this.lastActive = target;
-                    this.notify();
-                    return "ok";
+                // Send once, then poll patiently — never re-send inside the verify
+                // window, or an in-progress transition gets restarted (screen flash).
+                const deadline = Date.now() + VERIFY_DEADLINE_MS[target];
+                while (Date.now() < deadline) {
+                    await sleep(VERIFY_POLL_MS);
+                    const lum = await this.getLuminance();
+                    const active = this.classify(lum);
+                    streamDeck.logger.info(`setInput ${target} attempt ${attempt}: luminance=${lum} → ${active}`);
+                    if (active === target) {
+                        this.assumedInput = target;
+                        this.lastActive = target;
+                        this.notify();
+                        return "ok";
+                    }
+                    // Switching away from the Mac: the display going dark/unreachable
+                    // means the switch happened even though we can't verify it.
+                    if (target !== "tb" && active === "offline") {
+                        this.assumedInput = target;
+                        this.lastActive = active;
+                        this.notify();
+                        return "ok";
+                    }
                 }
-                // Switching away from the Mac can succeed without us being able to
-                // verify (e.g. target profile collides, or the display vanished).
-                if (target !== "tb" && (active === "offline" || active === "unknown")) {
+                // Deadline passed with no verification: for non-TB targets an
+                // ambiguous probe most likely means it switched (profile collision);
+                // accept rather than re-send and yank the monitor around.
+                if (target !== "tb" && this.classify(await this.getLuminance()) === "unknown") {
                     this.assumedInput = target;
-                    this.lastActive = active;
                     this.notify();
                     return "ok";
                 }

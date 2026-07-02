@@ -8424,12 +8424,17 @@ class DisplayController {
         });
     }
     // ---- luminance ----
-    /** Returns current luminance, or null if the display is not enumerated (TB link down). */
+    /**
+     * Returns current luminance, or null if the display is not enumerated (TB
+     * link down) OR the reply is corrupted. While the monitor displays another
+     * input, DDC replies over the TB link are sometimes garbage (observed: -7,
+     * 35) — out-of-range values are noise, not data.
+     */
     async getLuminance() {
         try {
             const out = await this.m1ddc("get", "luminance");
             const v = parseInt(out, 10);
-            return Number.isFinite(v) ? v : null;
+            return Number.isFinite(v) && v >= 0 && v <= 100 ? v : null;
         }
         catch {
             return null;
@@ -8443,7 +8448,7 @@ class DisplayController {
         try {
             const out = await this.m1ddc("chg", "luminance", String(delta));
             const v = parseInt(out, 10);
-            if (Number.isFinite(v)) {
+            if (Number.isFinite(v) && v >= 0 && v <= 100) {
                 this.profiles[this.assumedInput] = v;
                 await this.persistProfiles();
                 return v;

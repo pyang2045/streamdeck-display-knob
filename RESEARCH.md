@@ -44,8 +44,8 @@ m1ddc display <uuid> set input-alt 209   # → DP 2 slot: no such port, no-op
 
 Hard-won caveats (all observed live):
 
-1. **`get input` readback lies.** It always returns 15 over the Thunderbolt link regardless of the OSD's active input. Never use it for verification.
-2. **Luminance readback is a working active-input probe.** The monitor keeps per-input brightness profiles and `get luminance` returns the *active* input's value — measured: Thunderbolt 26, DisplayPort 30, HDMI 90 (with the current user settings). Poll it a few seconds after a switch to verify it took.
+1. **`get input` readback lies.** While on Thunderbolt it always returns 15 regardless of history; while the monitor shows another input it may return corrupted values (observed: 35). It never reports the real active input — never use it for verification.
+2. **Luminance readback is a working active-input probe — when on TB.** The monitor keeps per-input brightness profiles and `get luminance` returns the *active* input's value — measured: Thunderbolt 26, DisplayPort 30, HDMI 90 (with the current user settings). Caveat: while the monitor displays another input, *any* DDC read over the TB link may come back corrupted (observed: luminance −7 while on HDMI, though clean 90 reads also occur) — treat out-of-range values as noise, not data.
 3. **Restores can need retries.** A switch command occasionally gets dropped (especially while a live input is handshaking). Retry every ~4 s until the luminance probe shows the expected profile value.
 4. **The DDC channel usually stays alive on other inputs** (luminance stayed readable while the OSD showed HDMI/DP), so programmatic recovery is normally possible. **But not always:** after sitting on the (empty) DP input, the monitor dropped its Thunderbolt link and vanished from the display list entirely; it re-enumerated ~30 s after returning to the TB input. Tools must tolerate temporary disappearance.
 5. Switching to an input with no live signal is inconsistent — sometimes it sticks (empty DP showed its no-signal screen), sometimes the command is ignored (HDMI with the Xbox in standby). Have a live source on the target when possible.

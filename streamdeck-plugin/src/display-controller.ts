@@ -64,7 +64,44 @@ class DisplayController {
     const settings = await streamDeck.settings.getGlobalSettings<{ profiles?: ProfileMap; uuid?: string }>();
     if (settings.profiles) this.profiles = settings.profiles;
     if (settings.uuid) this.displayUuid = settings.uuid;
+    await this.discoverDisplay();
     this.startPolling();
+  }
+
+  // ---- display discovery ----
+
+  private m1ddcRaw(...args: string[]): Promise<string> {
+    return new Promise((resolve, reject) => {
+      execFile(this.m1ddcPath(), args, { timeout: 5000 }, (err, stdout) => {
+        if (err) reject(err);
+        else resolve(stdout);
+      });
+    });
+  }
+
+  /**
+   * Find the LG UltraFine automatically so the plugin works without
+   * configuration and survives UUID changes (other Macs, re-enumeration).
+   */
+  async discoverDisplay(): Promise<boolean> {
+    try {
+      const out = await this.m1ddcRaw("display", "list");
+      const displays: { name: string; uuid: string }[] = [];
+      for (const line of out.split("\n")) {
+        const m = line.match(/^\[\d+\]\s+(.+?)\s+\(([0-9A-Fa-f-]{36})\)/);
+        if (m) displays.push({ name: m[1], uuid: m[2] });
+      }
+      const lg = displays.find((d) => /ULTRAFINE/i.test(d.name)) ?? displays.find((d) => /^LG\b/i.test(d.name));
+      if (!lg) return false;
+      if (lg.uuid !== this.displayUuid) {
+        streamDeck.logger.info(`discovered display "${lg.name}" (${lg.uuid})`);
+        this.displayUuid = lg.uuid;
+        await this.persistProfiles();
+      }
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private m1ddcPath(): string {
@@ -131,7 +168,12 @@ class DisplayController {
   }
 
   async detectActiveInput(): Promise<ActiveInput> {
-    const active = this.classify(await this.getLuminance());
+    let lum = await this.getLuminance();
+    if (lum === null) {
+      // Display gone: UUID may have changed on re-enumeration — rediscover.
+      if (await this.discoverDisplay()) lum = await this.getLuminance();
+    }
+    const active = this.classify(lum);
     if (active !== this.lastActive) {
       this.lastActive = active;
       if (active !== "unknown" && active !== "offline") this.assumedInput = active;

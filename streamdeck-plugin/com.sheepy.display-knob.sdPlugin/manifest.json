@@ -30,7 +30,9 @@
       "Tooltip": "Switch the UltraFine evo 6K to Thunderbolt, HDMI, or DisplayPort",
       "Icon": "imgs/switch-icon",
       "PropertyInspectorPath": "ui/switch-input.html",
-      "Controllers": ["Keypad"],
+      "Controllers": [
+        "Keypad"
+      ],
       "States": [
         {
           "Image": "imgs/input-inactive",
@@ -50,7 +52,9 @@
       "Tooltip": "Brightness up/down for the UltraFine evo 6K (hold to repeat)",
       "Icon": "imgs/brightness-icon",
       "PropertyInspectorPath": "ui/brightness.html",
-      "Controllers": ["Keypad"],
+      "Controllers": [
+        "Keypad"
+      ],
       "States": [
         {
           "Image": "imgs/brightness-key",

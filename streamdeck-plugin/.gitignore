@@ -1,2 +1,3 @@
 node_modules/
 com.sheepy.display-knob.sdPlugin/logs/
+*.streamDeckPlugin

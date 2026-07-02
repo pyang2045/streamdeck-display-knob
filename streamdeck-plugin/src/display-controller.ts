@@ -141,6 +141,29 @@ class DisplayController {
     }
   }
 
+  // ---- volume (VCP 0x62 / mute 0x8D — standard codes, honest readback) ----
+
+  /** Change speaker volume by delta; returns the new value, or null on failure. */
+  async changeVolume(delta: number): Promise<number | null> {
+    try {
+      const out = await this.m1ddc("chg", "volume", String(delta));
+      const v = parseInt(out, 10);
+      return Number.isFinite(v) && v >= 0 && v <= 100 ? v : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Mute or unmute the speakers. Returns false on failure. */
+  async setMute(on: boolean): Promise<boolean> {
+    try {
+      await this.m1ddc("set", "mute", on ? "on" : "off");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // ---- key refresh notifications ----
 
   onActiveChanged(listener: (active: InputSource) => void): () => void {

@@ -49,7 +49,7 @@
     {
       "UUID": "com.sheepy.display-knob.brightness",
       "Name": "Brightness",
-      "Tooltip": "Brightness up/down for the UltraFine evo 6K (hold to repeat)",
+      "Tooltip": "Brightness up/down for the UltraFine evo 6K (one step per press)",
       "Icon": "imgs/brightness-icon",
       "PropertyInspectorPath": "ui/brightness.html",
       "Controllers": [
@@ -60,6 +60,45 @@
           "Image": "imgs/brightness-key",
           "TitleAlignment": "middle",
           "Name": "Brightness"
+        }
+      ]
+    },
+    {
+      "UUID": "com.sheepy.display-knob.volume",
+      "Name": "Volume",
+      "Tooltip": "Speaker volume up/down for the UltraFine evo 6K (one step per press)",
+      "Icon": "imgs/volume-icon",
+      "PropertyInspectorPath": "ui/volume.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/volume-key",
+          "TitleAlignment": "middle",
+          "Name": "Volume"
+        }
+      ]
+    },
+    {
+      "UUID": "com.sheepy.display-knob.mute",
+      "Name": "Mute",
+      "Tooltip": "Toggle the UltraFine evo 6K speaker mute",
+      "Icon": "imgs/mute-icon",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "imgs/volume-key",
+          "TitleAlignment": "middle",
+          "Name": "Unmuted"
+        },
+        {
+          "Image": "imgs/mute-key",
+          "TitleAlignment": "middle",
+          "Name": "Muted"
         }
       ]
     }

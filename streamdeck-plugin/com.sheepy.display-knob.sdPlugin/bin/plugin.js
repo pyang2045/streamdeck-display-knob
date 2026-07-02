@@ -8449,6 +8449,28 @@ class DisplayController {
             return null;
         }
     }
+    // ---- volume (VCP 0x62 / mute 0x8D — standard codes, honest readback) ----
+    /** Change speaker volume by delta; returns the new value, or null on failure. */
+    async changeVolume(delta) {
+        try {
+            const out = await this.m1ddc("chg", "volume", String(delta));
+            const v = parseInt(out, 10);
+            return Number.isFinite(v) && v >= 0 && v <= 100 ? v : null;
+        }
+        catch {
+            return null;
+        }
+    }
+    /** Mute or unmute the speakers. Returns false on failure. */
+    async setMute(on) {
+        try {
+            await this.m1ddc("set", "mute", on ? "on" : "off");
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
     // ---- key refresh notifications ----
     onActiveChanged(listener) {
         this.listeners.add(listener);
@@ -8590,7 +8612,7 @@ let SwitchInput = (() => {
     return _classThis;
 })();
 
-const TITLE_RESET_MS = 1500;
+const TITLE_RESET_MS$1 = 1500;
 let Brightness = (() => {
     let _classDecorators = [action({ UUID: "com.sheepy.display-knob.brightness" })];
     let _classDescriptor;
@@ -8626,7 +8648,7 @@ let Brightness = (() => {
                     clearTimeout(this.titleTimer);
                     this.titleTimer = setTimeout(() => {
                         void ev.action.setTitle(this.glyph(ev.payload.settings));
-                    }, TITLE_RESET_MS);
+                    }, TITLE_RESET_MS$1);
                 }
             }
         }
@@ -8637,9 +8659,103 @@ let Brightness = (() => {
     return _classThis;
 })();
 
+const TITLE_RESET_MS = 1500;
+let Volume = (() => {
+    let _classDecorators = [action({ UUID: "com.sheepy.display-knob.volume" })];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    let _classSuper = SingletonAction;
+    (class extends _classSuper {
+        static { _classThis = this; }
+        static {
+            const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
+            __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+            _classThis = _classDescriptor.value;
+            if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+            __runInitializers(_classThis, _classExtraInitializers);
+        }
+        titleTimer;
+        async onWillAppear(ev) {
+            if (ev.action.isKey()) {
+                await ev.action.setTitle(this.glyph(ev.payload.settings));
+            }
+        }
+        /** One press = one step, same as brightness. */
+        async onKeyDown(ev) {
+            const settings = ev.payload.settings;
+            const step = Math.abs(settings.step ?? 5) * (settings.direction === "down" ? -1 : 1);
+            const value = await displayController.changeVolume(step);
+            if (ev.action.isKey()) {
+                if (value === null) {
+                    await ev.action.showAlert();
+                }
+                else {
+                    await ev.action.setTitle(String(value));
+                    clearTimeout(this.titleTimer);
+                    this.titleTimer = setTimeout(() => {
+                        void ev.action.setTitle(this.glyph(ev.payload.settings));
+                    }, TITLE_RESET_MS);
+                }
+            }
+        }
+        glyph(settings) {
+            return settings.direction === "down" ? "♪ −" : "♪ +";
+        }
+    });
+    return _classThis;
+})();
+
+/**
+ * Blind mute toggle: the monitor's mute state can't be read back over DDC,
+ * so we track it locally (assume unmuted at start) — consistent with the
+ * plugin's send-blindly design.
+ */
+let Mute = (() => {
+    let _classDecorators = [action({ UUID: "com.sheepy.display-knob.mute" })];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    let _classSuper = SingletonAction;
+    (class extends _classSuper {
+        static { _classThis = this; }
+        static {
+            const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
+            __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+            _classThis = _classDescriptor.value;
+            if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+            __runInitializers(_classThis, _classExtraInitializers);
+        }
+        muted = false;
+        async onWillAppear(ev) {
+            if (ev.action.isKey()) {
+                await ev.action.setState(this.muted ? 1 : 0);
+            }
+        }
+        async onKeyDown(ev) {
+            const next = !this.muted;
+            const ok = await displayController.setMute(next);
+            if (!ev.action.isKey())
+                return;
+            if (!ok) {
+                await ev.action.showAlert();
+                return;
+            }
+            this.muted = next;
+            for (const a of this.actions) {
+                if (a.isKey())
+                    await a.setState(this.muted ? 1 : 0);
+            }
+        }
+    });
+    return _classThis;
+})();
+
 streamDeck.logger.setLevel(LogLevel.INFO);
 streamDeck.actions.registerAction(new SwitchInput());
 streamDeck.actions.registerAction(new Brightness());
+streamDeck.actions.registerAction(new Volume());
+streamDeck.actions.registerAction(new Mute());
 await streamDeck.connect();
 await displayController.init();
 streamDeck.logger.info("display-knob plugin connected");

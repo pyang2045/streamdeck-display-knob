@@ -5,7 +5,6 @@
 #   ./lg.sh bri <0-100|+n|-n>     set or change brightness
 #   ./lg.sh current               infer active input from luminance profile
 #   ./lg.sh status                raw luminance probe (TB=26, DP=30, HDMI=90)
-#   ./lg.sh regs                  dump input-related registers (0x60, 0xF4, 0x10)
 #   ./lg.sh list                  list displays
 
 # Auto-discover the LG UltraFine's UUID; fall back to the known one.
@@ -22,16 +21,6 @@ case "$1" in
       *)     m1ddc display $LG set luminance $2 ;;
     esac ;;
   status) echo "luminance: $(m1ddc display $LG get luminance 2>&1)" ;;
-  regs)
-    # Dump the input-related registers in one shot.
-    # NOTE: while the monitor displays another input, ALL reads over the TB
-    # link may return corrupted values (observed: -7, 35). Only reads taken
-    # while on Thunderbolt are trustworthy.
-    echo "display:                  $LG"
-    echo "VCP 0x60 (get input):     $(m1ddc display $LG get input 2>&1)   # 15 on TB — never reports the real input"
-    echo "VCP 0xF4 (get input-alt): $(m1ddc display $LG get input-alt 2>&1)   # write-only — read is garbage"
-    echo "VCP 0x10 (get luminance): $(m1ddc display $LG get luminance 2>&1)   # per-input profile: TB=26 DP=30 HDMI=90"
-    ;;
   current)
     # No trustworthy input readback on this monitor (VCP 0x60 always says 15;
     # 0xF4 is write-only). Infer from the per-input brightness profile instead.

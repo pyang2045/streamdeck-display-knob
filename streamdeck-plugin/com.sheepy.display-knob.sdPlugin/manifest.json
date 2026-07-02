@@ -1,0 +1,63 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "UUID": "com.sheepy.display-knob",
+  "Name": "Display Knob",
+  "Version": "0.1.0.0",
+  "Author": "sheepy",
+  "Description": "Input switching and brightness for the LG 32\" UltraFine evo 6K (32U990A) over DDC.",
+  "Category": "Display Knob",
+  "CategoryIcon": "imgs/category-icon",
+  "Icon": "imgs/plugin-icon",
+  "CodePath": "bin/plugin.js",
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.4"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "12"
+    }
+  ],
+  "Nodejs": {
+    "Version": "20",
+    "Debug": "disabled"
+  },
+  "Actions": [
+    {
+      "UUID": "com.sheepy.display-knob.switch-input",
+      "Name": "Switch Input",
+      "Tooltip": "Switch the UltraFine evo 6K to Thunderbolt, HDMI, or DisplayPort",
+      "Icon": "imgs/switch-icon",
+      "PropertyInspectorPath": "ui/switch-input.html",
+      "Controllers": ["Keypad"],
+      "States": [
+        {
+          "Image": "imgs/input-inactive",
+          "TitleAlignment": "middle",
+          "Name": "Inactive"
+        },
+        {
+          "Image": "imgs/input-active",
+          "TitleAlignment": "middle",
+          "Name": "Active"
+        }
+      ]
+    },
+    {
+      "UUID": "com.sheepy.display-knob.brightness",
+      "Name": "Brightness",
+      "Tooltip": "Brightness up/down for the UltraFine evo 6K (hold to repeat)",
+      "Icon": "imgs/brightness-icon",
+      "PropertyInspectorPath": "ui/brightness.html",
+      "Controllers": ["Keypad"],
+      "States": [
+        {
+          "Image": "imgs/brightness-key",
+          "TitleAlignment": "middle",
+          "Name": "Brightness"
+        }
+      ]
+    }
+  ]
+}

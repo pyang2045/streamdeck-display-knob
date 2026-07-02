@@ -8590,7 +8590,6 @@ let SwitchInput = (() => {
     return _classThis;
 })();
 
-const REPEAT_MS = 250;
 const TITLE_RESET_MS = 1500;
 let Brightness = (() => {
     let _classDecorators = [action({ UUID: "com.sheepy.display-knob.brightness" })];
@@ -8607,38 +8606,29 @@ let Brightness = (() => {
             if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
             __runInitializers(_classThis, _classExtraInitializers);
         }
-        repeatTimer;
         titleTimer;
         async onWillAppear(ev) {
             if (ev.action.isKey()) {
                 await ev.action.setTitle(this.glyph(ev.payload.settings));
             }
         }
+        /** One press = one step. No hold-to-repeat. */
         async onKeyDown(ev) {
-            const apply = async () => {
-                const settings = ev.payload.settings;
-                const step = Math.abs(settings.step ?? 10) * (settings.direction === "down" ? -1 : 1);
-                const value = await displayController.changeBrightness(step);
-                if (ev.action.isKey()) {
-                    if (value === null) {
-                        await ev.action.showAlert();
-                    }
-                    else {
-                        await ev.action.setTitle(String(value));
-                        clearTimeout(this.titleTimer);
-                        this.titleTimer = setTimeout(() => {
-                            void ev.action.setTitle(this.glyph(ev.payload.settings));
-                        }, TITLE_RESET_MS);
-                    }
+            const settings = ev.payload.settings;
+            const step = Math.abs(settings.step ?? 10) * (settings.direction === "down" ? -1 : 1);
+            const value = await displayController.changeBrightness(step);
+            if (ev.action.isKey()) {
+                if (value === null) {
+                    await ev.action.showAlert();
                 }
-            };
-            await apply();
-            clearInterval(this.repeatTimer);
-            this.repeatTimer = setInterval(apply, REPEAT_MS); // hold to repeat
-        }
-        onKeyUp(_ev) {
-            clearInterval(this.repeatTimer);
-            this.repeatTimer = undefined;
+                else {
+                    await ev.action.setTitle(String(value));
+                    clearTimeout(this.titleTimer);
+                    this.titleTimer = setTimeout(() => {
+                        void ev.action.setTitle(this.glyph(ev.payload.settings));
+                    }, TITLE_RESET_MS);
+                }
+            }
         }
         glyph(settings) {
             return settings.direction === "down" ? "☀ −" : "☀ +";

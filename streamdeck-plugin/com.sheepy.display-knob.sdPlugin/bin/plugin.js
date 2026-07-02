@@ -8362,6 +8362,11 @@ class DisplayController {
         if (settings.uuid)
             this.displayUuid = settings.uuid;
         await this.discoverDisplay();
+        streamDeck.logger.info(`profiles: ${JSON.stringify(this.profiles)} uuid: ${this.displayUuid}`);
+        const values = Object.values(this.profiles);
+        if (new Set(values).size !== values.length) {
+            streamDeck.logger.warn("profile collision: two inputs share a brightness value — input detection is degraded; set distinct brightness per input");
+        }
         this.startPolling();
     }
     // ---- display discovery ----
@@ -8453,18 +8458,24 @@ class DisplayController {
         await streamDeck.settings.setGlobalSettings({ profiles: this.profiles, uuid: this.displayUuid });
     }
     // ---- input detection ----
-    classify(luminance) {
+    classify(luminance, expected) {
         if (luminance === null)
             return "offline";
         const matches = Object.keys(this.profiles).filter((k) => this.profiles[k] === luminance);
+        // Profile values can collide (two inputs set to the same brightness).
+        // When verifying a switch we just commanded, a reading that matches the
+        // commanded target counts as that target — otherwise the verifier keeps
+        // re-sending and restarts the transition (visible flashing).
+        if (expected && matches.includes(expected))
+            return expected;
         if (matches.length === 1)
             return matches[0];
-        // Ambiguous profiles or transitional value (e.g. 30 during a switch):
-        // trust our last assumption if it is one of the matches.
         if (matches.includes(this.assumedInput))
             return this.assumedInput;
         return "unknown";
     }
+    idleUnknownLum = null;
+    idleUnknownStreak = 0;
     async detectActiveInput() {
         let lum = await this.getLuminance();
         if (lum === null) {
@@ -8472,7 +8483,30 @@ class DisplayController {
             if (await this.discoverDisplay())
                 lum = await this.getLuminance();
         }
-        const active = this.classify(lum);
+        let active = this.classify(lum);
+        // Self-heal drift while idle: a stable reading that matches no profile
+        // means the brightness of the current input changed behind our back
+        // (monitor joystick, other software). Attribute it to the input we last
+        // knew we were on.
+        if (active === "unknown" && lum !== null && lum >= 0) {
+            if (lum === this.idleUnknownLum)
+                this.idleUnknownStreak++;
+            else {
+                this.idleUnknownLum = lum;
+                this.idleUnknownStreak = 1;
+            }
+            if (this.idleUnknownStreak >= 3) {
+                streamDeck.logger.info(`adopting drifted profile ${this.assumedInput}=${lum}`);
+                this.profiles[this.assumedInput] = lum;
+                await this.persistProfiles();
+                this.idleUnknownStreak = 0;
+                active = this.assumedInput;
+            }
+        }
+        else {
+            this.idleUnknownLum = null;
+            this.idleUnknownStreak = 0;
+        }
         if (active !== this.lastActive) {
             this.lastActive = active;
             if (active !== "unknown" && active !== "offline")
@@ -8510,16 +8544,44 @@ class DisplayController {
                 // Send once, then poll patiently — never re-send inside the verify
                 // window, or an in-progress transition gets restarted (screen flash).
                 const deadline = Date.now() + VERIFY_DEADLINE_MS[target];
+                let stableLum = null;
+                let stableCount = 0;
                 while (Date.now() < deadline) {
                     await sleep(VERIFY_POLL_MS);
                     const lum = await this.getLuminance();
-                    const active = this.classify(lum);
+                    const active = this.classify(lum, target);
                     streamDeck.logger.info(`setInput ${target} attempt ${attempt}: luminance=${lum} → ${active}`);
                     if (active === target) {
                         this.assumedInput = target;
                         this.lastActive = target;
                         this.notify();
                         return "ok";
+                    }
+                    // Self-heal profile drift: a reading that is stable across several
+                    // polls but matches no stored profile means the map is stale (the
+                    // brightness was changed outside the plugin). The monitor has
+                    // settled after our command — adopt the reading as the target's
+                    // profile instead of re-sending (which would flash the screen).
+                    if (active === "unknown" && lum !== null && lum >= 0) {
+                        if (lum === stableLum)
+                            stableCount++;
+                        else {
+                            stableLum = lum;
+                            stableCount = 1;
+                        }
+                        if (stableCount >= 3) {
+                            streamDeck.logger.info(`adopting drifted profile ${target}=${lum}`);
+                            this.profiles[target] = lum;
+                            await this.persistProfiles();
+                            this.assumedInput = target;
+                            this.lastActive = target;
+                            this.notify();
+                            return "ok";
+                        }
+                    }
+                    else {
+                        stableLum = null;
+                        stableCount = 0;
                     }
                     // Switching away from the Mac: the display going dark/unreachable
                     // means the switch happened even though we can't verify it.
@@ -8533,7 +8595,7 @@ class DisplayController {
                 // Deadline passed with no verification: for non-TB targets an
                 // ambiguous probe most likely means it switched (profile collision);
                 // accept rather than re-send and yank the monitor around.
-                if (target !== "tb" && this.classify(await this.getLuminance()) === "unknown") {
+                if (target !== "tb" && this.classify(await this.getLuminance(), target) === "unknown") {
                     this.assumedInput = target;
                     this.notify();
                     return "ok";

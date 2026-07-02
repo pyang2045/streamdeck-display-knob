@@ -1,5 +1,5 @@
 import { action, KeyDownEvent, SingletonAction, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
-import { displayController, InputSource, INPUT_LABEL, ActiveInput } from "../display-controller";
+import { displayController, InputSource, INPUT_LABEL } from "../display-controller";
 
 type Settings = {
   target?: InputSource;
@@ -46,9 +46,9 @@ export class SwitchInput extends SingletonAction<Settings> {
     await this.refreshAll();
   }
 
-  /** Highlight the key whose target matches the active input; keep titles in sync. */
+  /** Highlight the key whose target matches the last commanded input. */
   private async refreshAll(): Promise<void> {
-    const active: ActiveInput = displayController.active;
+    const active: InputSource = displayController.active;
     for (const a of this.actions) {
       const settings = await a.getSettings();
       const target = settings.target ?? "tb";

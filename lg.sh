@@ -7,7 +7,9 @@
 #   ./lg.sh status                raw luminance probe (TB=26, DP=30, HDMI=90)
 #   ./lg.sh list                  list displays
 
-LG=041B0EA8-173D-41AF-B60D-A63236F45C02
+# Auto-discover the LG UltraFine's UUID; fall back to the known one.
+LG=$(m1ddc display list 2>/dev/null | awk -F'[()]' '/ULTRAFINE/ {print $2; exit}')
+[[ -z "$LG" ]] && LG=041B0EA8-173D-41AF-B60D-A63236F45C02
 
 case "$1" in
   tb)     m1ddc display $LG set input-alt 210 ;;   # Thunderbolt 5 (= USB-C slot in LG's table)

@@ -188,6 +188,9 @@ class DisplayController {
       return "failed";
     } finally {
       this.switching = false;
+      // Re-arm the lock from completion time: presses that queued up while we
+      // were switching arrive now and must still be discarded.
+      this.lockedUntil = Date.now() + SWITCH_LOCK_MS;
     }
   }
 

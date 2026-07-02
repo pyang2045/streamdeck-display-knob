@@ -8481,6 +8481,9 @@ class DisplayController {
         }
         finally {
             this.switching = false;
+            // Re-arm the lock from completion time: presses that queued up while we
+            // were switching arrive now and must still be discarded.
+            this.lockedUntil = Date.now() + SWITCH_LOCK_MS;
         }
     }
     // ---- poller ----
@@ -8599,7 +8602,13 @@ let SwitchInput = (() => {
                 this.unsubscribe = undefined;
             }
         }
-        async onKeyDown(ev) {
+        onKeyDown(ev) {
+            // Deliberately not awaited: a switch (incl. verify retries) can run for
+            // many seconds, and blocking here would make later key presses queue up
+            // and execute after the lock expired instead of being discarded.
+            void this.performSwitch(ev);
+        }
+        async performSwitch(ev) {
             const target = ev.payload.settings.target ?? "tb";
             const result = await displayController.setInput(target);
             if (result === "ok") {
@@ -8609,7 +8618,7 @@ let SwitchInput = (() => {
                 await ev.action.showAlert();
             }
             else {
-                // locked: another switch is in progress / cooling down — brief hint only
+                // locked: switch in progress / cooling down — discard with a brief hint
                 await ev.action.setTitle("⏳");
                 setTimeout(() => void this.refreshAll(), 1000);
                 return;

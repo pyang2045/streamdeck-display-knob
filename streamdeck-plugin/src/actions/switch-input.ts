@@ -23,7 +23,14 @@ export class SwitchInput extends SingletonAction<Settings> {
     }
   }
 
-  override async onKeyDown(ev: KeyDownEvent<Settings>): Promise<void> {
+  override onKeyDown(ev: KeyDownEvent<Settings>): void {
+    // Deliberately not awaited: a switch (incl. verify retries) can run for
+    // many seconds, and blocking here would make later key presses queue up
+    // and execute after the lock expired instead of being discarded.
+    void this.performSwitch(ev);
+  }
+
+  private async performSwitch(ev: KeyDownEvent<Settings>): Promise<void> {
     const target = ev.payload.settings.target ?? "tb";
     const result = await displayController.setInput(target);
     if (result === "ok") {
@@ -31,7 +38,7 @@ export class SwitchInput extends SingletonAction<Settings> {
     } else if (result === "failed") {
       await ev.action.showAlert();
     } else {
-      // locked: another switch is in progress / cooling down — brief hint only
+      // locked: switch in progress / cooling down — discard with a brief hint
       await ev.action.setTitle("⏳");
       setTimeout(() => void this.refreshAll(), 1000);
       return;

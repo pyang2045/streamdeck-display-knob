@@ -25,11 +25,16 @@ export class SwitchInput extends SingletonAction<Settings> {
 
   override async onKeyDown(ev: KeyDownEvent<Settings>): Promise<void> {
     const target = ev.payload.settings.target ?? "tb";
-    const ok = await displayController.setInput(target);
-    if (ok) {
+    const result = await displayController.setInput(target);
+    if (result === "ok") {
       await ev.action.showOk();
-    } else {
+    } else if (result === "failed") {
       await ev.action.showAlert();
+    } else {
+      // locked: another switch is in progress / cooling down — brief hint only
+      await ev.action.setTitle("⏳");
+      setTimeout(() => void this.refreshAll(), 1000);
+      return;
     }
     await this.refreshAll();
   }

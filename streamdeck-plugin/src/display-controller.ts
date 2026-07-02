@@ -43,6 +43,9 @@ const DEFAULT_PROFILES: ProfileMap = { tb: 26, hdmi: 90, dp: 30 };
 const POLL_INTERVAL_MS = 4000;
 const SWITCH_RETRY_MS = 4000;
 const SWITCH_MAX_TRIES = 5;
+const SWITCH_LOCK_MS = 5000;
+
+export type SwitchResult = "ok" | "failed" | "locked";
 
 export type ActiveInput = InputSource | "unknown" | "offline";
 
@@ -55,6 +58,7 @@ class DisplayController {
   private assumedInput: InputSource = "tb";
   private pollTimer?: NodeJS.Timeout;
   private switching = false;
+  private lockedUntil = 0;
 
   async init(): Promise<void> {
     const settings = await streamDeck.settings.getGlobalSettings<{ profiles?: ProfileMap; uuid?: string }>();
@@ -146,10 +150,15 @@ class DisplayController {
    * Switch input with verify-and-retry: the monitor occasionally drops a
    * switch write (especially while a live source is handshaking), and it
    * sometimes refuses to switch to an input with no signal.
+   *
+   * A lockout (SWITCH_LOCK_MS from the accepted press, extended by however
+   * long the retry loop runs) rejects further switch commands so rapid
+   * presses can't queue conflicting transitions mid-switch.
    */
-  async setInput(target: InputSource): Promise<boolean> {
-    if (this.switching) return false;
+  async setInput(target: InputSource): Promise<SwitchResult> {
+    if (this.switching || Date.now() < this.lockedUntil) return "locked";
     this.switching = true;
+    this.lockedUntil = Date.now() + SWITCH_LOCK_MS;
     try {
       for (let attempt = 1; attempt <= SWITCH_MAX_TRIES; attempt++) {
         try {
@@ -165,7 +174,7 @@ class DisplayController {
           this.assumedInput = target;
           this.lastActive = target;
           this.notify();
-          return true;
+          return "ok";
         }
         // Switching away from the Mac can succeed without us being able to
         // verify (e.g. target profile collides, or the display vanished).
@@ -173,10 +182,10 @@ class DisplayController {
           this.assumedInput = target;
           this.lastActive = active;
           this.notify();
-          return true;
+          return "ok";
         }
       }
-      return false;
+      return "failed";
     } finally {
       this.switching = false;
     }

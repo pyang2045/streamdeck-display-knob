@@ -8340,6 +8340,7 @@ const DEFAULT_PROFILES = { tb: 26, hdmi: 90, dp: 30 };
 const POLL_INTERVAL_MS = 4000;
 const SWITCH_RETRY_MS = 4000;
 const SWITCH_MAX_TRIES = 5;
+const SWITCH_LOCK_MS = 5000;
 class DisplayController {
     profiles = { ...DEFAULT_PROFILES };
     displayUuid = DEFAULT_UUID;
@@ -8349,6 +8350,7 @@ class DisplayController {
     assumedInput = "tb";
     pollTimer;
     switching = false;
+    lockedUntil = 0;
     async init() {
         const settings = await streamDeck.settings.getGlobalSettings();
         if (settings.profiles)
@@ -8438,11 +8440,16 @@ class DisplayController {
      * Switch input with verify-and-retry: the monitor occasionally drops a
      * switch write (especially while a live source is handshaking), and it
      * sometimes refuses to switch to an input with no signal.
+     *
+     * A lockout (SWITCH_LOCK_MS from the accepted press, extended by however
+     * long the retry loop runs) rejects further switch commands so rapid
+     * presses can't queue conflicting transitions mid-switch.
      */
     async setInput(target) {
-        if (this.switching)
-            return false;
+        if (this.switching || Date.now() < this.lockedUntil)
+            return "locked";
         this.switching = true;
+        this.lockedUntil = Date.now() + SWITCH_LOCK_MS;
         try {
             for (let attempt = 1; attempt <= SWITCH_MAX_TRIES; attempt++) {
                 try {
@@ -8459,7 +8466,7 @@ class DisplayController {
                     this.assumedInput = target;
                     this.lastActive = target;
                     this.notify();
-                    return true;
+                    return "ok";
                 }
                 // Switching away from the Mac can succeed without us being able to
                 // verify (e.g. target profile collides, or the display vanished).
@@ -8467,10 +8474,10 @@ class DisplayController {
                     this.assumedInput = target;
                     this.lastActive = active;
                     this.notify();
-                    return true;
+                    return "ok";
                 }
             }
-            return false;
+            return "failed";
         }
         finally {
             this.switching = false;
@@ -8594,12 +8601,18 @@ let SwitchInput = (() => {
         }
         async onKeyDown(ev) {
             const target = ev.payload.settings.target ?? "tb";
-            const ok = await displayController.setInput(target);
-            if (ok) {
+            const result = await displayController.setInput(target);
+            if (result === "ok") {
                 await ev.action.showOk();
             }
-            else {
+            else if (result === "failed") {
                 await ev.action.showAlert();
+            }
+            else {
+                // locked: another switch is in progress / cooling down — brief hint only
+                await ev.action.setTitle("⏳");
+                setTimeout(() => void this.refreshAll(), 1000);
+                return;
             }
             await this.refreshAll();
         }

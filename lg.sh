@@ -24,8 +24,11 @@ case "$1" in
   status) echo "luminance: $(m1ddc display $LG get luminance 2>&1)" ;;
   regs)
     # Dump the input-related registers in one shot.
+    # NOTE: while the monitor displays another input, ALL reads over the TB
+    # link may return corrupted values (observed: -7, 35). Only reads taken
+    # while on Thunderbolt are trustworthy.
     echo "display:                  $LG"
-    echo "VCP 0x60 (get input):     $(m1ddc display $LG get input 2>&1)   # always 15 — readback lies"
+    echo "VCP 0x60 (get input):     $(m1ddc display $LG get input 2>&1)   # 15 on TB — never reports the real input"
     echo "VCP 0xF4 (get input-alt): $(m1ddc display $LG get input-alt 2>&1)   # write-only — read is garbage"
     echo "VCP 0x10 (get luminance): $(m1ddc display $LG get luminance 2>&1)   # per-input profile: TB=26 DP=30 HDMI=90"
     ;;

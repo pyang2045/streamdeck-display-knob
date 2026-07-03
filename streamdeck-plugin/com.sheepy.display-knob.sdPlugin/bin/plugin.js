@@ -8325,7 +8325,6 @@ const INPUTS = {
     hdmi: { code: 144, label: "HDMI" }, // HDMI 1
     dp: { code: 208, label: "DP" }, // DisplayPort 1
 };
-const DEFAULT_UUID = "041B0EA8-173D-41AF-B60D-A63236F45C02";
 /**
  * Design: switch BLINDLY, guarded by a time lock.
  *
@@ -8339,7 +8338,8 @@ const DEFAULT_UUID = "041B0EA8-173D-41AF-B60D-A63236F45C02";
  */
 const SWITCH_LOCK_MS = 5000;
 class DisplayController {
-    displayUuid = DEFAULT_UUID;
+    /** Discovered at startup; empty until the LG UltraFine is found. */
+    displayUuid = "";
     m1ddcBin;
     listeners = new Set();
     /** The input we last commanded — shown as "active" on the keys. */
@@ -8352,7 +8352,12 @@ class DisplayController {
         if (settings.uuid)
             this.displayUuid = settings.uuid;
         await this.discoverDisplay();
-        streamDeck.logger.info(`display uuid: ${this.displayUuid}`);
+        if (!this.displayUuid) {
+            streamDeck.logger.warn("no LG UltraFine found; will retry on first command");
+        }
+        else {
+            streamDeck.logger.info(`display uuid: ${this.displayUuid}`);
+        }
     }
     m1ddcPath() {
         if (this.m1ddcBin)
@@ -8371,7 +8376,13 @@ class DisplayController {
             });
         });
     }
-    m1ddc(...args) {
+    async m1ddc(...args) {
+        // Self-heal if the display isn't known yet (not found at startup, or
+        // re-enumerated) so commands work once it connects.
+        if (!this.displayUuid)
+            await this.discoverDisplay();
+        if (!this.displayUuid)
+            throw new Error("LG UltraFine not found");
         return this.m1ddcRaw("display", this.displayUuid, ...args);
     }
     /** Find the LG UltraFine automatically so no configuration is needed. */

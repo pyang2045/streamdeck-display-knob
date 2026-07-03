@@ -1,6 +1,6 @@
 {
   "name": "display-knob-streamdeck",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Stream Deck plugin: input switching and brightness for the LG 32\" UltraFine evo 6K (32U990A)",
   "type": "module",
   "private": true,

@@ -8320,20 +8320,10 @@ if (streamDeck.manifest.SDKVersion >= 3) {
     process.exit(errorCode.incompatibleSdkVersion);
 }
 
-/**
- * LG 32" UltraFine evo 6K (32U990A) input codes.
- * Only the LG-alt register (m1ddc `set input-alt`, VCP 0xF4) switches reliably;
- * standard VCP 0x60 writes are silently ignored by this monitor.
- */
-const INPUT_ALT_CODE = {
-    tb: 210, // Thunderbolt 5 (LG "USB-C" slot)
-    hdmi: 144, // HDMI 1
-    dp: 208, // DisplayPort 1
-};
-const INPUT_LABEL = {
-    tb: "Thunderbolt",
-    hdmi: "HDMI",
-    dp: "DisplayPort",
+const INPUTS = {
+    tb: { code: 210, label: "TB" }, // Thunderbolt 5 (LG "USB-C" slot)
+    hdmi: { code: 144, label: "HDMI" }, // HDMI 1
+    dp: { code: 208, label: "DP" }, // DisplayPort 1
 };
 const DEFAULT_UUID = "041B0EA8-173D-41AF-B60D-A63236F45C02";
 /**
@@ -8350,9 +8340,12 @@ const DEFAULT_UUID = "041B0EA8-173D-41AF-B60D-A63236F45C02";
 const SWITCH_LOCK_MS = 5000;
 class DisplayController {
     displayUuid = DEFAULT_UUID;
+    m1ddcBin;
     listeners = new Set();
     /** The input we last commanded — shown as "active" on the keys. */
     assumedInput = "tb";
+    /** Speaker mute state — unreadable over DDC, so tracked by assumption. */
+    assumedMuted = false;
     lockedUntil = 0;
     async init() {
         const settings = await streamDeck.settings.getGlobalSettings();
@@ -8362,10 +8355,11 @@ class DisplayController {
         streamDeck.logger.info(`display uuid: ${this.displayUuid}`);
     }
     m1ddcPath() {
+        if (this.m1ddcBin)
+            return this.m1ddcBin;
         const bundled = path.join(path.dirname(fileURLToPath(import.meta.url)), "m1ddc");
-        if (existsSync(bundled))
-            return bundled;
-        return "/opt/homebrew/bin/m1ddc"; // dev fallback
+        this.m1ddcBin = existsSync(bundled) ? bundled : "/opt/homebrew/bin/m1ddc"; // dev fallback
+        return this.m1ddcBin;
     }
     m1ddcRaw(...args) {
         return new Promise((resolve, reject) => {
@@ -8430,30 +8424,25 @@ class DisplayController {
         return "ok";
     }
     async sendSwitch(target) {
-        streamDeck.logger.info(`setInput ${target} (input-alt ${INPUT_ALT_CODE[target]})`);
-        await this.m1ddc("set", "input-alt", String(INPUT_ALT_CODE[target]));
+        streamDeck.logger.info(`setInput ${target} (input-alt ${INPUTS[target].code})`);
+        await this.m1ddc("set", "input-alt", String(INPUTS[target].code));
     }
     /** Last commanded input — the plugin's (unverified) view of the world. */
     get active() {
         return this.assumedInput;
     }
-    // ---- brightness ----
+    // ---- brightness / volume (VCP 0x10 / 0x62 — honest readback) ----
     /** Change brightness by delta; returns the new value, or null on failure. */
-    async changeBrightness(delta) {
-        try {
-            const out = await this.m1ddc("chg", "luminance", String(delta));
-            const v = parseInt(out, 10);
-            return Number.isFinite(v) && v >= 0 && v <= 100 ? v : null;
-        }
-        catch {
-            return null;
-        }
+    changeBrightness(delta) {
+        return this.changeVcp("luminance", delta);
     }
-    // ---- volume (VCP 0x62 / mute 0x8D — standard codes, honest readback) ----
     /** Change speaker volume by delta; returns the new value, or null on failure. */
-    async changeVolume(delta) {
+    changeVolume(delta) {
+        return this.changeVcp("volume", delta);
+    }
+    async changeVcp(vcp, delta) {
         try {
-            const out = await this.m1ddc("chg", "volume", String(delta));
+            const out = await this.m1ddc("chg", vcp, String(delta));
             const v = parseInt(out, 10);
             return Number.isFinite(v) && v >= 0 && v <= 100 ? v : null;
         }
@@ -8461,14 +8450,20 @@ class DisplayController {
             return null;
         }
     }
-    /** Mute or unmute the speakers. Returns false on failure. */
-    async setMute(on) {
+    // ---- mute (VCP 0x8D — blind toggle, state tracked by assumption) ----
+    get muted() {
+        return this.assumedMuted;
+    }
+    /** Toggle mute; returns the new state, or null on failure. */
+    async toggleMute() {
+        const next = !this.assumedMuted;
         try {
-            await this.m1ddc("set", "mute", on ? "on" : "off");
-            return true;
+            await this.m1ddc("set", "mute", next ? "on" : "off");
+            this.assumedMuted = next;
+            return next;
         }
         catch {
-            return false;
+            return null;
         }
     }
     // ---- key refresh notifications ----
@@ -8563,30 +8558,32 @@ let SwitchInput = (() => {
         unsubscribe;
         async onWillAppear(ev) {
             if (!this.unsubscribe) {
-                this.unsubscribe = displayController.onActiveChanged(() => this.refreshAll());
+                // Active-input change only affects which key is highlighted (state).
+                this.unsubscribe = displayController.onActiveChanged(() => this.refreshStates());
             }
-            await this.refreshAll();
+            await this.renderKey(ev.action, ev.payload.settings.target);
         }
-        async onDidReceiveSettings(_ev) {
-            // Property-inspector change (e.g. Input dropdown) — re-render the key.
-            await this.refreshAll();
+        async onDidReceiveSettings(ev) {
+            // Property-inspector change (e.g. Input dropdown) — re-render title + state.
+            await this.renderKey(ev.action, ev.payload.settings.target);
         }
         onWillDisappear(_ev) {
-            if ([...this.actions].length === 0) {
+            if (this.actions[Symbol.iterator]().next().done) {
                 this.unsubscribe?.();
                 this.unsubscribe = undefined;
             }
         }
         onKeyDown(ev) {
-            // Deliberately not awaited: a switch (incl. verify retries) can run for
-            // many seconds, and blocking here would make later key presses queue up
-            // and execute after the lock expired instead of being discarded.
+            // Deliberately not awaited: setInput holds a multi-second time lock, and
+            // blocking here would make later presses queue up and run after the lock
+            // expired instead of being discarded.
             void this.performSwitch(ev);
         }
         async performSwitch(ev) {
             const target = ev.payload.settings.target ?? "tb";
             const result = await displayController.setInput(target);
             if (result === "ok") {
+                // A successful switch fires onActiveChanged → refreshStates; just confirm.
                 await ev.action.showOk();
             }
             else if (result === "failed") {
@@ -8595,22 +8592,24 @@ let SwitchInput = (() => {
             else {
                 // locked: switch in progress / cooling down — discard with a brief hint
                 await ev.action.setTitle("⏳");
-                setTimeout(() => void this.refreshAll(), 1000);
-                return;
+                setTimeout(() => void this.renderKey(ev.action, target), 1000);
             }
-            await this.refreshAll();
         }
-        /** Highlight the key whose target matches the last commanded input. */
-        async refreshAll() {
+        /** Full render of one key: title (invariant) and highlight state. */
+        async renderKey(action, target = "tb") {
+            if (!action.isKey())
+                return;
+            await Promise.all([action.setTitle(INPUTS[target].label), action.setState(displayController.active === target ? 1 : 0)]);
+        }
+        /** Highlight-only refresh across all keys — for active-input changes. */
+        async refreshStates() {
             const active = displayController.active;
-            for (const a of this.actions) {
-                const settings = await a.getSettings();
-                const target = settings.target ?? "tb";
-                if (a.isKey()) {
-                    await a.setState(active === target ? 1 : 0);
-                    await a.setTitle(INPUT_LABEL[target].replace("Thunderbolt", "TB").replace("DisplayPort", "DP"));
-                }
-            }
+            await Promise.all([...this.actions].map(async (a) => {
+                if (!a.isKey())
+                    return;
+                const { target = "tb" } = await a.getSettings();
+                await a.setState(active === target ? 1 : 0);
+            }));
         }
     });
     return _classThis;
@@ -8620,23 +8619,70 @@ let SwitchInput = (() => {
  * Runtime key faces: the base glyph plus a +/− badge baked into the image,
  * so up/down keys are distinguishable even with key titles hidden.
  * Stream Deck accepts inline SVG via setImage as a data URI.
+ *
+ * Results are memoized — there are only a handful of (glyph, color, direction)
+ * combinations, so the SVG→base64 encode runs at most once per key face.
  */
+const cache = new Map();
 function directionBadge(glyph, color, direction) {
-    const badge = direction === "down"
-        ? `<line x1="49" y1="58" x2="63" y2="58" stroke="${color}" stroke-width="5" stroke-linecap="round"/>`
-        : `<line x1="49" y1="58" x2="63" y2="58" stroke="${color}" stroke-width="5" stroke-linecap="round"/><line x1="56" y1="51" x2="56" y2="65" stroke="${color}" stroke-width="5" stroke-linecap="round"/>`;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72"><rect width="72" height="72" rx="12" fill="#17171b"/>${glyph}${badge}</svg>`;
-    return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+    const key = `${color}|${direction}|${glyph}`;
+    const cached = cache.get(key);
+    if (cached)
+        return cached;
+    const stroke = `stroke="${color}" stroke-width="5" stroke-linecap="round"`;
+    const horizontal = `<line x1="49" y1="58" x2="63" y2="58" ${stroke}/>`;
+    const vertical = direction === "up" ? `<line x1="56" y1="51" x2="56" y2="65" ${stroke}/>` : "";
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72"><rect width="72" height="72" rx="12" fill="#17171b"/>${glyph}${horizontal}${vertical}</svg>`;
+    const uri = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+    cache.set(key, uri);
+    return uri;
 }
 
-const TITLE_RESET_MS$1 = 1500;
+const TITLE_RESET_MS = 1500;
+/**
+ * A key that nudges a DDC value up or down by a step on each press: renders a
+ * glyph with a +/− direction badge, and flashes the new value on the key.
+ * Shared by the Brightness and Volume actions.
+ */
+class StepAction extends SingletonAction {
+    titleTimer;
+    async onWillAppear(ev) {
+        await this.render(ev);
+    }
+    async onDidReceiveSettings(ev) {
+        await this.render(ev);
+    }
+    async render(ev) {
+        if (ev.action.isKey()) {
+            await ev.action.setImage(directionBadge(this.glyph, this.color, ev.payload.settings.direction ?? "up"));
+        }
+    }
+    /** One press = one step. No hold-to-repeat. */
+    async onKeyDown(ev) {
+        const { direction, step } = ev.payload.settings;
+        const delta = Math.abs(step ?? this.defaultStep) * (direction === "down" ? -1 : 1);
+        const value = await this.change(delta);
+        if (!ev.action.isKey())
+            return;
+        if (value === null) {
+            await ev.action.showAlert();
+            return;
+        }
+        await ev.action.setTitle(String(value));
+        clearTimeout(this.titleTimer);
+        this.titleTimer = setTimeout(() => {
+            void ev.action.setTitle();
+        }, TITLE_RESET_MS);
+    }
+}
+
 const SUN = `<circle cx="36" cy="30" r="9.5" fill="#f0c94e"/><g stroke="#f0c94e" stroke-width="3.2" stroke-linecap="round"><line x1="36" y1="11" x2="36" y2="16"/><line x1="36" y1="44" x2="36" y2="49"/><line x1="17" y1="30" x2="22" y2="30"/><line x1="50" y1="30" x2="55" y2="30"/><line x1="23" y1="17" x2="26.5" y2="20.5"/><line x1="45.5" y1="39.5" x2="49" y2="43"/><line x1="49" y1="17" x2="45.5" y2="20.5"/><line x1="26.5" y1="39.5" x2="23" y2="43"/></g>`;
 let Brightness = (() => {
     let _classDecorators = [action({ UUID: "com.sheepy.display-knob.brightness" })];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
-    let _classSuper = SingletonAction;
+    let _classSuper = StepAction;
     (class extends _classSuper {
         static { _classThis = this; }
         static {
@@ -8646,47 +8692,23 @@ let Brightness = (() => {
             if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
             __runInitializers(_classThis, _classExtraInitializers);
         }
-        titleTimer;
-        async onWillAppear(ev) {
-            if (ev.action.isKey()) {
-                await ev.action.setImage(directionBadge(SUN, "#f0c94e", ev.payload.settings.direction ?? "up"));
-            }
-        }
-        async onDidReceiveSettings(ev) {
-            if (ev.action.isKey()) {
-                await ev.action.setImage(directionBadge(SUN, "#f0c94e", ev.payload.settings.direction ?? "up"));
-            }
-        }
-        /** One press = one step. No hold-to-repeat. */
-        async onKeyDown(ev) {
-            const settings = ev.payload.settings;
-            const step = Math.abs(settings.step ?? 10) * (settings.direction === "down" ? -1 : 1);
-            const value = await displayController.changeBrightness(step);
-            if (ev.action.isKey()) {
-                if (value === null) {
-                    await ev.action.showAlert();
-                }
-                else {
-                    await ev.action.setTitle(String(value));
-                    clearTimeout(this.titleTimer);
-                    this.titleTimer = setTimeout(() => {
-                        void ev.action.setTitle();
-                    }, TITLE_RESET_MS$1);
-                }
-            }
+        glyph = SUN;
+        color = "#f0c94e";
+        defaultStep = 10;
+        change(delta) {
+            return displayController.changeBrightness(delta);
         }
     });
     return _classThis;
 })();
 
-const TITLE_RESET_MS = 1500;
 const SPEAKER = `<path d="M16 26 h8 l10 -9 v26 l-10 -9 h-8 z" fill="#5fd3a5"/><path d="M40 24 a10 10 0 0 1 0 12 M45 19 a17 17 0 0 1 0 22" stroke="#5fd3a5" stroke-width="4" fill="none" stroke-linecap="round"/>`;
 let Volume = (() => {
     let _classDecorators = [action({ UUID: "com.sheepy.display-knob.volume" })];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
-    let _classSuper = SingletonAction;
+    let _classSuper = StepAction;
     (class extends _classSuper {
         static { _classThis = this; }
         static {
@@ -8696,43 +8718,20 @@ let Volume = (() => {
             if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
             __runInitializers(_classThis, _classExtraInitializers);
         }
-        titleTimer;
-        async onWillAppear(ev) {
-            if (ev.action.isKey()) {
-                await ev.action.setImage(directionBadge(SPEAKER, "#5fd3a5", ev.payload.settings.direction ?? "up"));
-            }
-        }
-        async onDidReceiveSettings(ev) {
-            if (ev.action.isKey()) {
-                await ev.action.setImage(directionBadge(SPEAKER, "#5fd3a5", ev.payload.settings.direction ?? "up"));
-            }
-        }
-        /** One press = one step, same as brightness. */
-        async onKeyDown(ev) {
-            const settings = ev.payload.settings;
-            const step = Math.abs(settings.step ?? 5) * (settings.direction === "down" ? -1 : 1);
-            const value = await displayController.changeVolume(step);
-            if (ev.action.isKey()) {
-                if (value === null) {
-                    await ev.action.showAlert();
-                }
-                else {
-                    await ev.action.setTitle(String(value));
-                    clearTimeout(this.titleTimer);
-                    this.titleTimer = setTimeout(() => {
-                        void ev.action.setTitle();
-                    }, TITLE_RESET_MS);
-                }
-            }
+        glyph = SPEAKER;
+        color = "#5fd3a5";
+        defaultStep = 5;
+        change(delta) {
+            return displayController.changeVolume(delta);
         }
     });
     return _classThis;
 })();
 
 /**
- * Blind mute toggle: the monitor's mute state can't be read back over DDC,
- * so we track it locally (assume unmuted at start) — consistent with the
- * plugin's send-blindly design.
+ * Blind mute toggle. The monitor's mute state can't be read back over DDC, so
+ * the controller tracks it by assumption (see DisplayController.toggleMute);
+ * this action is a pure view of that state.
  */
 let Mute = (() => {
     let _classDecorators = [action({ UUID: "com.sheepy.display-knob.mute" })];
@@ -8749,26 +8748,20 @@ let Mute = (() => {
             if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
             __runInitializers(_classThis, _classExtraInitializers);
         }
-        muted = false;
         async onWillAppear(ev) {
             if (ev.action.isKey()) {
-                await ev.action.setState(this.muted ? 1 : 0);
+                await ev.action.setState(displayController.muted ? 1 : 0);
             }
         }
         async onKeyDown(ev) {
-            const next = !this.muted;
-            const ok = await displayController.setMute(next);
+            const muted = await displayController.toggleMute();
             if (!ev.action.isKey())
                 return;
-            if (!ok) {
+            if (muted === null) {
                 await ev.action.showAlert();
                 return;
             }
-            this.muted = next;
-            for (const a of this.actions) {
-                if (a.isKey())
-                    await a.setState(this.muted ? 1 : 0);
-            }
+            await Promise.all([...this.actions].map((a) => (a.isKey() ? a.setState(muted ? 1 : 0) : undefined)));
         }
     });
     return _classThis;

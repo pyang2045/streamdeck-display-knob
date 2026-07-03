@@ -6,7 +6,7 @@ import { displayController } from "../display-controller";
  * the controller tracks it by assumption (see DisplayController.toggleMute);
  * this action is a pure view of that state.
  */
-@action({ UUID: "com.sheepy.display-knob.mute" })
+@action({ UUID: "dev.sheepy.display-knob.mute" })
 export class Mute extends SingletonAction {
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
     if (ev.action.isKey()) {

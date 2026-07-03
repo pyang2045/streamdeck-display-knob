@@ -6,7 +6,7 @@ import typescript from "@rollup/plugin-typescript";
 export default {
   input: "src/plugin.ts",
   output: {
-    file: "com.sheepy.display-knob.sdPlugin/bin/plugin.js",
+    file: "dev.sheepy.display-knob.sdPlugin/bin/plugin.js",
     format: "es",
     sourcemap: false,
   },

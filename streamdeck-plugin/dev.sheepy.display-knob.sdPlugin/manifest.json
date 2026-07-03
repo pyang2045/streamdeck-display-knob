@@ -1,6 +1,6 @@
 {
   "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
-  "UUID": "com.sheepy.display-knob",
+  "UUID": "dev.sheepy.display-knob",
   "Name": "Display Knob",
   "Version": "1.0.1.0",
   "Author": "sheepy",
@@ -26,7 +26,7 @@
   },
   "Actions": [
     {
-      "UUID": "com.sheepy.display-knob.switch-input",
+      "UUID": "dev.sheepy.display-knob.switch-input",
       "Name": "Switch Input",
       "Tooltip": "Switch the UltraFine evo 6K to Thunderbolt, HDMI, or DisplayPort",
       "Icon": "imgs/switch-icon",
@@ -48,7 +48,7 @@
       ]
     },
     {
-      "UUID": "com.sheepy.display-knob.brightness",
+      "UUID": "dev.sheepy.display-knob.brightness",
       "Name": "Brightness",
       "Tooltip": "Brightness up/down for the UltraFine evo 6K (one step per press)",
       "Icon": "imgs/brightness-icon",
@@ -65,7 +65,7 @@
       ]
     },
     {
-      "UUID": "com.sheepy.display-knob.volume",
+      "UUID": "dev.sheepy.display-knob.volume",
       "Name": "Volume",
       "Tooltip": "Speaker volume up/down for the UltraFine evo 6K (one step per press)",
       "Icon": "imgs/volume-icon",
@@ -82,7 +82,7 @@
       ]
     },
     {
-      "UUID": "com.sheepy.display-knob.mute",
+      "UUID": "dev.sheepy.display-knob.mute",
       "Name": "Mute",
       "Tooltip": "Toggle the UltraFine evo 6K speaker mute",
       "Icon": "imgs/mute-icon",

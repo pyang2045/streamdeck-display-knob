@@ -8552,7 +8552,7 @@ typeof SuppressedError === "function" ? SuppressedError : function (error, suppr
 };
 
 let SwitchInput = (() => {
-    let _classDecorators = [action({ UUID: "com.sheepy.display-knob.switch-input" })];
+    let _classDecorators = [action({ UUID: "dev.sheepy.display-knob.switch-input" })];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
@@ -8689,7 +8689,7 @@ class StepAction extends SingletonAction {
 
 const SUN = `<circle cx="36" cy="30" r="9.5" fill="#f0c94e"/><g stroke="#f0c94e" stroke-width="3.2" stroke-linecap="round"><line x1="36" y1="11" x2="36" y2="16"/><line x1="36" y1="44" x2="36" y2="49"/><line x1="17" y1="30" x2="22" y2="30"/><line x1="50" y1="30" x2="55" y2="30"/><line x1="23" y1="17" x2="26.5" y2="20.5"/><line x1="45.5" y1="39.5" x2="49" y2="43"/><line x1="49" y1="17" x2="45.5" y2="20.5"/><line x1="26.5" y1="39.5" x2="23" y2="43"/></g>`;
 let Brightness = (() => {
-    let _classDecorators = [action({ UUID: "com.sheepy.display-knob.brightness" })];
+    let _classDecorators = [action({ UUID: "dev.sheepy.display-knob.brightness" })];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
@@ -8715,7 +8715,7 @@ let Brightness = (() => {
 
 const SPEAKER = `<path d="M16 26 h8 l10 -9 v26 l-10 -9 h-8 z" fill="#5fd3a5"/><path d="M40 24 a10 10 0 0 1 0 12 M45 19 a17 17 0 0 1 0 22" stroke="#5fd3a5" stroke-width="4" fill="none" stroke-linecap="round"/>`;
 let Volume = (() => {
-    let _classDecorators = [action({ UUID: "com.sheepy.display-knob.volume" })];
+    let _classDecorators = [action({ UUID: "dev.sheepy.display-knob.volume" })];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
@@ -8745,7 +8745,7 @@ let Volume = (() => {
  * this action is a pure view of that state.
  */
 let Mute = (() => {
-    let _classDecorators = [action({ UUID: "com.sheepy.display-knob.mute" })];
+    let _classDecorators = [action({ UUID: "dev.sheepy.display-knob.mute" })];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;

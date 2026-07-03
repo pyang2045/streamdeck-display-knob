@@ -8612,7 +8612,21 @@ let SwitchInput = (() => {
     return _classThis;
 })();
 
+/**
+ * Runtime key faces: the base glyph plus a +/− badge baked into the image,
+ * so up/down keys are distinguishable even with key titles hidden.
+ * Stream Deck accepts inline SVG via setImage as a data URI.
+ */
+function directionBadge(glyph, color, direction) {
+    const badge = direction === "down"
+        ? `<line x1="49" y1="58" x2="63" y2="58" stroke="${color}" stroke-width="5" stroke-linecap="round"/>`
+        : `<line x1="49" y1="58" x2="63" y2="58" stroke="${color}" stroke-width="5" stroke-linecap="round"/><line x1="56" y1="51" x2="56" y2="65" stroke="${color}" stroke-width="5" stroke-linecap="round"/>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72"><rect width="72" height="72" rx="12" fill="#17171b"/>${glyph}${badge}</svg>`;
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
 const TITLE_RESET_MS$1 = 1500;
+const SUN = `<circle cx="36" cy="30" r="9.5" fill="#f0c94e"/><g stroke="#f0c94e" stroke-width="3.2" stroke-linecap="round"><line x1="36" y1="11" x2="36" y2="16"/><line x1="36" y1="44" x2="36" y2="49"/><line x1="17" y1="30" x2="22" y2="30"/><line x1="50" y1="30" x2="55" y2="30"/><line x1="23" y1="17" x2="26.5" y2="20.5"/><line x1="45.5" y1="39.5" x2="49" y2="43"/><line x1="49" y1="17" x2="45.5" y2="20.5"/><line x1="26.5" y1="39.5" x2="23" y2="43"/></g>`;
 let Brightness = (() => {
     let _classDecorators = [action({ UUID: "com.sheepy.display-knob.brightness" })];
     let _classDescriptor;
@@ -8631,7 +8645,12 @@ let Brightness = (() => {
         titleTimer;
         async onWillAppear(ev) {
             if (ev.action.isKey()) {
-                await ev.action.setTitle(this.glyph(ev.payload.settings));
+                await ev.action.setImage(directionBadge(SUN, "#f0c94e", ev.payload.settings.direction ?? "up"));
+            }
+        }
+        async onDidReceiveSettings(ev) {
+            if (ev.action.isKey()) {
+                await ev.action.setImage(directionBadge(SUN, "#f0c94e", ev.payload.settings.direction ?? "up"));
             }
         }
         /** One press = one step. No hold-to-repeat. */
@@ -8647,19 +8666,17 @@ let Brightness = (() => {
                     await ev.action.setTitle(String(value));
                     clearTimeout(this.titleTimer);
                     this.titleTimer = setTimeout(() => {
-                        void ev.action.setTitle(this.glyph(ev.payload.settings));
+                        void ev.action.setTitle();
                     }, TITLE_RESET_MS$1);
                 }
             }
-        }
-        glyph(settings) {
-            return settings.direction === "down" ? "☀ −" : "☀ +";
         }
     });
     return _classThis;
 })();
 
 const TITLE_RESET_MS = 1500;
+const SPEAKER = `<path d="M16 26 h8 l10 -9 v26 l-10 -9 h-8 z" fill="#5fd3a5"/><path d="M40 24 a10 10 0 0 1 0 12 M45 19 a17 17 0 0 1 0 22" stroke="#5fd3a5" stroke-width="4" fill="none" stroke-linecap="round"/>`;
 let Volume = (() => {
     let _classDecorators = [action({ UUID: "com.sheepy.display-knob.volume" })];
     let _classDescriptor;
@@ -8678,7 +8695,12 @@ let Volume = (() => {
         titleTimer;
         async onWillAppear(ev) {
             if (ev.action.isKey()) {
-                await ev.action.setTitle(this.glyph(ev.payload.settings));
+                await ev.action.setImage(directionBadge(SPEAKER, "#5fd3a5", ev.payload.settings.direction ?? "up"));
+            }
+        }
+        async onDidReceiveSettings(ev) {
+            if (ev.action.isKey()) {
+                await ev.action.setImage(directionBadge(SPEAKER, "#5fd3a5", ev.payload.settings.direction ?? "up"));
             }
         }
         /** One press = one step, same as brightness. */
@@ -8694,13 +8716,10 @@ let Volume = (() => {
                     await ev.action.setTitle(String(value));
                     clearTimeout(this.titleTimer);
                     this.titleTimer = setTimeout(() => {
-                        void ev.action.setTitle(this.glyph(ev.payload.settings));
+                        void ev.action.setTitle();
                     }, TITLE_RESET_MS);
                 }
             }
-        }
-        glyph(settings) {
-            return settings.direction === "down" ? "♪ −" : "♪ +";
         }
     });
     return _classThis;

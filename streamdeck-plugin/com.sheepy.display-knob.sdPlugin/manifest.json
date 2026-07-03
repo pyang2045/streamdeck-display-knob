@@ -4,7 +4,7 @@
   "Name": "Display Knob",
   "Version": "0.2.0.0",
   "Author": "sheepy",
-  "Description": "Input switching and brightness for the LG 32\" UltraFine evo 6K (32U990A) over DDC.",
+  "Description": "Input switching, brightness, volume, and mute for the LG 32\" UltraFine evo 6K (32U990A) over DDC.",
   "Category": "Display Knob",
   "CategoryIcon": "imgs/category-icon",
   "Icon": "imgs/plugin-icon",

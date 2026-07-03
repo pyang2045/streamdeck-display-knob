@@ -21,9 +21,7 @@ Built and tested on Apple Silicon (M4 Pro, macOS 26) with a Stream Deck XL.
 This monitor has some hard-won DDC quirks — the standard input register lies on
 read, the real input switch lives in an LG vendor register (VCP 0xF4), and
 brightness is per-input. The plugin therefore **switches blindly and tracks
-state by assumption** rather than trusting readback. The full investigation,
-with the verified VCP codes and dead ends, is in
-[RESEARCH.md](RESEARCH.md).
+state by assumption** rather than trusting readback.
 
 ## Install
 
@@ -56,8 +54,6 @@ copy is bundled in the plugin; nothing else to install.
 
 - `streamdeck-plugin/` — the Stream Deck plugin (TypeScript, Elgato SDK v2)
 - `lg.sh` — standalone DDC control script
-- `RESEARCH.md` — DDC investigation and verified VCP codes
-- `PLAN-streamdeck.md` — plugin design notes
 
 ## Credits
 

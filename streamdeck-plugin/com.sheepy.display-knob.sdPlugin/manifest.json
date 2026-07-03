@@ -36,12 +36,12 @@
       "States": [
         {
           "Image": "imgs/input-inactive",
-          "TitleAlignment": "middle",
+          "TitleAlignment": "bottom",
           "Name": "Inactive"
         },
         {
           "Image": "imgs/input-active",
-          "TitleAlignment": "middle",
+          "TitleAlignment": "bottom",
           "Name": "Active"
         }
       ]
@@ -58,7 +58,7 @@
       "States": [
         {
           "Image": "imgs/brightness-key",
-          "TitleAlignment": "middle",
+          "TitleAlignment": "bottom",
           "Name": "Brightness"
         }
       ]
@@ -75,7 +75,7 @@
       "States": [
         {
           "Image": "imgs/volume-key",
-          "TitleAlignment": "middle",
+          "TitleAlignment": "bottom",
           "Name": "Volume"
         }
       ]
@@ -92,12 +92,12 @@
       "States": [
         {
           "Image": "imgs/volume-key",
-          "TitleAlignment": "middle",
+          "TitleAlignment": "bottom",
           "Name": "Unmuted"
         },
         {
           "Image": "imgs/mute-key",
-          "TitleAlignment": "middle",
+          "TitleAlignment": "bottom",
           "Name": "Muted"
         }
       ]

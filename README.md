@@ -25,7 +25,7 @@ state by assumption** rather than trusting readback.
 
 ## Install
 
-Download `com.sheepy.display-knob.streamDeckPlugin` and double-click it, or
+Download `dev.sheepy.display-knob.streamDeckPlugin` and double-click it, or
 build from source:
 
 ```bash
@@ -34,7 +34,7 @@ npm install
 npm run build
 ```
 
-Then link/copy `streamdeck-plugin/com.sheepy.display-knob.sdPlugin` into
+Then link/copy `streamdeck-plugin/dev.sheepy.display-knob.sdPlugin` into
 `~/Library/Application Support/com.elgato.StreamDeck/Plugins/`.
 
 Requires the [m1ddc](https://github.com/waydabber/m1ddc) binary — a universal

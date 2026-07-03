@@ -5,7 +5,7 @@ type Settings = {
   target?: InputSource;
 };
 
-@action({ UUID: "com.sheepy.display-knob.switch-input" })
+@action({ UUID: "dev.sheepy.display-knob.switch-input" })
 export class SwitchInput extends SingletonAction<Settings> {
   private unsubscribe?: () => void;
 

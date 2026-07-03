@@ -1,0 +1,3 @@
+The bundled 'm1ddc' binary is from https://github.com/waydabber/m1ddc
+and is distributed under the MIT License, Copyright (c) waydabber.
+See the m1ddc repository for full license text.

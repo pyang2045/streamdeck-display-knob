@@ -6,9 +6,9 @@
 #   ./lg.sh status                current brightness (only trustworthy while on TB)
 #   ./lg.sh list                  list displays
 
-# Auto-discover the LG UltraFine's UUID; fall back to the known one.
+# Auto-discover the LG UltraFine's UUID.
 LG=$(m1ddc display list 2>/dev/null | awk -F'[()]' '/ULTRAFINE/ {print $2; exit}')
-[[ -z "$LG" ]] && LG=041B0EA8-173D-41AF-B60D-A63236F45C02
+[[ -z "$LG" ]] && { echo "LG UltraFine not found (is it connected?)" >&2; exit 1; }
 
 case "$1" in
   tb)     m1ddc display $LG set input-alt 210 ;;   # Thunderbolt 5 (= USB-C slot in LG's table)

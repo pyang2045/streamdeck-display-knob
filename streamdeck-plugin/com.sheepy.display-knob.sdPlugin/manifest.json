@@ -4,6 +4,7 @@
   "Name": "Display Knob",
   "Version": "1.0.1.0",
   "Author": "sheepy",
+  "URL": "https://sheepy.dev",
   "Description": "Input switching, brightness, volume, and mute for the LG 32\" UltraFine evo 6K (32U990A) over DDC.",
   "Category": "Display Knob",
   "CategoryIcon": "imgs/category-icon",

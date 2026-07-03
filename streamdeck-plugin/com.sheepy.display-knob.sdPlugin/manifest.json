@@ -2,7 +2,7 @@
   "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
   "UUID": "com.sheepy.display-knob",
   "Name": "Display Knob",
-  "Version": "1.0.0.0",
+  "Version": "1.0.1.0",
   "Author": "sheepy",
   "Description": "Input switching, brightness, volume, and mute for the LG 32\" UltraFine evo 6K (32U990A) over DDC.",
   "Category": "Display Knob",

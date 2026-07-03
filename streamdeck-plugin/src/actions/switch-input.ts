@@ -1,4 +1,4 @@
-import { action, KeyDownEvent, SingletonAction, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
+import { action, DidReceiveSettingsEvent, KeyDownEvent, SingletonAction, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
 import { displayController, InputSource, INPUT_LABEL } from "../display-controller";
 
 type Settings = {
@@ -13,6 +13,11 @@ export class SwitchInput extends SingletonAction<Settings> {
     if (!this.unsubscribe) {
       this.unsubscribe = displayController.onActiveChanged(() => this.refreshAll());
     }
+    await this.refreshAll();
+  }
+
+  override async onDidReceiveSettings(_ev: DidReceiveSettingsEvent<Settings>): Promise<void> {
+    // Property-inspector change (e.g. Input dropdown) — re-render the key.
     await this.refreshAll();
   }
 

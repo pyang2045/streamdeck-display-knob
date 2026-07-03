@@ -8567,6 +8567,10 @@ let SwitchInput = (() => {
             }
             await this.refreshAll();
         }
+        async onDidReceiveSettings(_ev) {
+            // Property-inspector change (e.g. Input dropdown) — re-render the key.
+            await this.refreshAll();
+        }
         onWillDisappear(_ev) {
             if ([...this.actions].length === 0) {
                 this.unsubscribe?.();

@@ -7,20 +7,18 @@ import streamDeck from "@elgato/streamdeck";
 export type InputSource = "tb" | "hdmi" | "dp";
 
 /**
- * LG 32" UltraFine evo 6K (32U990A) input codes.
- * Only the LG-alt register (m1ddc `set input-alt`, VCP 0xF4) switches reliably;
- * standard VCP 0x60 writes are silently ignored by this monitor.
+ * LG 32" UltraFine evo 6K (32U990A) inputs: the LG-alt switch code (m1ddc
+ * `set input-alt`, VCP 0xF4 — standard VCP 0x60 writes are silently ignored)
+ * and the short label rendered on the key.
  */
-const INPUT_ALT_CODE: Record<InputSource, number> = {
-  tb: 210, // Thunderbolt 5 (LG "USB-C" slot)
-  hdmi: 144, // HDMI 1
-  dp: 208, // DisplayPort 1
-};
-
-export const INPUT_LABEL: Record<InputSource, string> = {
-  tb: "Thunderbolt",
-  hdmi: "HDMI",
-  dp: "DisplayPort",
+export interface InputInfo {
+  code: number;
+  label: string;
+}
+export const INPUTS: Record<InputSource, InputInfo> = {
+  tb: { code: 210, label: "TB" }, // Thunderbolt 5 (LG "USB-C" slot)
+  hdmi: { code: 144, label: "HDMI" }, // HDMI 1
+  dp: { code: 208, label: "DP" }, // DisplayPort 1
 };
 
 const DEFAULT_UUID = "041B0EA8-173D-41AF-B60D-A63236F45C02";
@@ -42,9 +40,12 @@ export type SwitchResult = "ok" | "failed" | "locked";
 
 class DisplayController {
   private displayUuid = DEFAULT_UUID;
+  private m1ddcBin?: string;
   private listeners = new Set<(active: InputSource) => void>();
   /** The input we last commanded — shown as "active" on the keys. */
   private assumedInput: InputSource = "tb";
+  /** Speaker mute state — unreadable over DDC, so tracked by assumption. */
+  private assumedMuted = false;
   private lockedUntil = 0;
 
   async init(): Promise<void> {
@@ -55,9 +56,10 @@ class DisplayController {
   }
 
   private m1ddcPath(): string {
+    if (this.m1ddcBin) return this.m1ddcBin;
     const bundled = path.join(path.dirname(fileURLToPath(import.meta.url)), "m1ddc");
-    if (existsSync(bundled)) return bundled;
-    return "/opt/homebrew/bin/m1ddc"; // dev fallback
+    this.m1ddcBin = existsSync(bundled) ? bundled : "/opt/homebrew/bin/m1ddc"; // dev fallback
+    return this.m1ddcBin;
   }
 
   private m1ddcRaw(...args: string[]): Promise<string> {
@@ -119,8 +121,8 @@ class DisplayController {
   }
 
   private async sendSwitch(target: InputSource): Promise<void> {
-    streamDeck.logger.info(`setInput ${target} (input-alt ${INPUT_ALT_CODE[target]})`);
-    await this.m1ddc("set", "input-alt", String(INPUT_ALT_CODE[target]));
+    streamDeck.logger.info(`setInput ${target} (input-alt ${INPUTS[target].code})`);
+    await this.m1ddc("set", "input-alt", String(INPUTS[target].code));
   }
 
   /** Last commanded input — the plugin's (unverified) view of the world. */
@@ -128,25 +130,21 @@ class DisplayController {
     return this.assumedInput;
   }
 
-  // ---- brightness ----
+  // ---- brightness / volume (VCP 0x10 / 0x62 — honest readback) ----
 
   /** Change brightness by delta; returns the new value, or null on failure. */
-  async changeBrightness(delta: number): Promise<number | null> {
-    try {
-      const out = await this.m1ddc("chg", "luminance", String(delta));
-      const v = parseInt(out, 10);
-      return Number.isFinite(v) && v >= 0 && v <= 100 ? v : null;
-    } catch {
-      return null;
-    }
+  changeBrightness(delta: number): Promise<number | null> {
+    return this.changeVcp("luminance", delta);
   }
-
-  // ---- volume (VCP 0x62 / mute 0x8D — standard codes, honest readback) ----
 
   /** Change speaker volume by delta; returns the new value, or null on failure. */
-  async changeVolume(delta: number): Promise<number | null> {
+  changeVolume(delta: number): Promise<number | null> {
+    return this.changeVcp("volume", delta);
+  }
+
+  private async changeVcp(vcp: string, delta: number): Promise<number | null> {
     try {
-      const out = await this.m1ddc("chg", "volume", String(delta));
+      const out = await this.m1ddc("chg", vcp, String(delta));
       const v = parseInt(out, 10);
       return Number.isFinite(v) && v >= 0 && v <= 100 ? v : null;
     } catch {
@@ -154,13 +152,21 @@ class DisplayController {
     }
   }
 
-  /** Mute or unmute the speakers. Returns false on failure. */
-  async setMute(on: boolean): Promise<boolean> {
+  // ---- mute (VCP 0x8D — blind toggle, state tracked by assumption) ----
+
+  get muted(): boolean {
+    return this.assumedMuted;
+  }
+
+  /** Toggle mute; returns the new state, or null on failure. */
+  async toggleMute(): Promise<boolean | null> {
+    const next = !this.assumedMuted;
     try {
-      await this.m1ddc("set", "mute", on ? "on" : "off");
-      return true;
+      await this.m1ddc("set", "mute", next ? "on" : "off");
+      this.assumedMuted = next;
+      return next;
     } catch {
-      return false;
+      return null;
     }
   }
 
